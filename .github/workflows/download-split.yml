@@ -1,4 +1,4 @@
-name: Download and Upload Video
+name: Download YouTube Video
 
 on:
   workflow_dispatch:
@@ -20,27 +20,38 @@ jobs:
   process:
     runs-on: ubuntu-latest
     steps:
-      - name: Install yt-dlp
+      - name: Install yt-dlp and ffmpeg
         run: |
           sudo apt-get update
-          pip install yt-dlp
-      - name: Set format selector
+          sudo apt-get install -y ffmpeg
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+
+      - name: Decode cookie string
+        run: |
+          echo "COOKIE_STRING=$(echo '${{ secrets.YOUTUBE_COOKIE_STRING }}' | base64 -d)" >> $GITHUB_ENV
+
+      - name: Set format
         run: |
           case "${{ github.event.inputs.resolution }}" in
             "720p")
-              echo "FORMAT=bestvideo[height<=720]+bestaudio" >> $GITHUB_ENV
+              echo "FORMAT=bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]" >> $GITHUB_ENV
               ;;
             "480p")
-              echo "FORMAT=bestvideo[height<=480]+bestaudio" >> $GITHUB_ENV
+              echo "FORMAT=bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]" >> $GITHUB_ENV
               ;;
             "360p")
-              echo "FORMAT=bestvideo[height<=360]+bestaudio" >> $GITHUB_ENV
+              echo "FORMAT=bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]" >> $GITHUB_ENV
               ;;
           esac
+
       - name: Download video
         run: |
           yt-dlp -f "$FORMAT" --merge-output-format mp4 \
+            --header "Cookie: $COOKIE_STRING" \
+            --no-check-certificate \
             -o "video.mp4" "${{ github.event.inputs.url }}"
+
       - name: Upload video
         uses: actions/upload-artifact@v4
         with:
