@@ -29,7 +29,14 @@ jobs:
 
       - name: Decode cookie string
         run: |
-          echo "COOKIE_STRING=$(echo '${{ secrets.YOUTUBE_COOKIE_STRING }}' | base64 -d)" >> $GITHUB_ENV
+          DECODED=$(echo '${{ secrets.YOUTUBE_COOKIE_STRING }}' | base64 -d 2>/dev/null)
+          if [ -z "$DECODED" ]; then
+            echo "ERROR: Cookie secret is empty or base64 decode failed"
+            exit 1
+          fi
+          echo "COOKIE_STRING=$DECODED" >> $GITHUB_ENV
+          echo "Cookie length: ${#DECODED}" 
+          echo "First 50 chars: ${DECODED:0:50}..."
 
       - name: Set format
         run: |
@@ -49,6 +56,7 @@ jobs:
         run: |
           yt-dlp -f "$FORMAT" --merge-output-format mp4 \
             --header "Cookie: $COOKIE_STRING" \
+            --verbose \
             --no-check-certificate \
             -o "video.mp4" "${{ github.event.inputs.url }}"
 
