@@ -1,4 +1,4 @@
-name: Download, Split, and Upload
+name: Download and Upload Video
 
 on:
   workflow_dispatch:
@@ -6,29 +6,44 @@ on:
       url:
         description: 'YouTube video URL'
         required: true
+      resolution:
+        description: 'Resolution'
+        required: true
+        default: '720p'
+        type: choice
+        options:
+          - 720p
+          - 480p
+          - 360p
 
 jobs:
   process:
     runs-on: ubuntu-latest
     steps:
-      - name: Install yt-dlp and rar
+      - name: Install yt-dlp
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget
           pip install yt-dlp
-          wget https://www.rarlab.com/rar/rarlinux-x64-7.1.1.tar.gz
-          tar -xzf rarlinux-x64-7.1.1.tar.gz
-          sudo cp rar/rar /usr/local/bin/
+      - name: Set format selector
+        run: |
+          case "${{ github.event.inputs.resolution }}" in
+            "720p")
+              echo "FORMAT=bestvideo[height<=720]+bestaudio" >> $GITHUB_ENV
+              ;;
+            "480p")
+              echo "FORMAT=bestvideo[height<=480]+bestaudio" >> $GITHUB_ENV
+              ;;
+            "360p")
+              echo "FORMAT=bestvideo[height<=360]+bestaudio" >> $GITHUB_ENV
+              ;;
+          esac
       - name: Download video
         run: |
-          yt-dlp -f bestvideo+bestaudio --merge-output-format mp4 \
+          yt-dlp -f "$FORMAT" --merge-output-format mp4 \
             -o "video.mp4" "${{ github.event.inputs.url }}"
-      - name: Split into 80MB RAR volumes
-        run: |
-          rar a -v80m -m0 -ep1 output.rar video.mp4
-      - name: Upload artifacts (expire in 1 day – GitHub minimum)
+      - name: Upload video
         uses: actions/upload-artifact@v4
         with:
-          name: rar-parts
-          path: output.part*.rar
+          name: video
+          path: video.mp4
           retention-days: 1
