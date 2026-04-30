@@ -27,16 +27,25 @@ jobs:
           sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
           sudo chmod a+rx /usr/local/bin/yt-dlp
 
-      - name: Decode cookie string
+      - name: Convert cookie string to Netscape format
         run: |
-          DECODED=$(echo '${{ secrets.YOUTUBE_COOKIE_STRING }}' | base64 -d 2>/dev/null)
-          if [ -z "$DECODED" ]; then
-            echo "ERROR: Cookie secret is empty or base64 decode failed"
-            exit 1
-          fi
-          echo "COOKIE_STRING=$DECODED" >> $GITHUB_ENV
-          echo "Cookie length: ${#DECODED}" 
-          echo "First 50 chars: ${DECODED:0:50}..."
+          cat > /tmp/convert.py << 'EOF'
+          import os
+          raw = os.environ['COOKIE_RAW']
+          lines = ["# Netscape HTTP Cookie File"]
+          for pair in raw.split(';'):
+              if '=' not in pair:
+                  continue
+              name, value = pair.split('=', 1)
+              name = name.strip()
+              value = value.strip()
+              lines.append(f".youtube.com\tTRUE\t/\tFALSE\t{2**31-1}\t{name}\t{value}")
+          with open('cookies.txt', 'w') as f:
+              f.write('\n'.join(lines))
+          EOF
+          python3 /tmp/convert.py
+        env:
+          COOKIE_RAW: ${{ secrets.YOUTUBE_COOKIE_RAW }}
 
       - name: Set format
         run: |
@@ -52,11 +61,10 @@ jobs:
               ;;
           esac
 
-      - name: Download video
+      - name: Download video with cookies file
         run: |
           yt-dlp -f "$FORMAT" --merge-output-format mp4 \
-            --header "Cookie: $COOKIE_STRING" \
-            --verbose \
+            --cookies cookies.txt \
             --no-check-certificate \
             -o "video.mp4" "${{ github.event.inputs.url }}"
 
